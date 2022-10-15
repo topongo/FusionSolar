@@ -51,14 +51,14 @@ def throttle_retry(func):
         self = args[0]
         try:
             return func(*args, **kwargs)
-        except HTTPError407 as e:
+        except (HTTPError407, HTTPError) as e:
             for i in range(1, self.max_retry + 1):
                 delay = i * 3
                 logging.debug(f'Sleeping {delay} seconds')
                 sleep(delay)
                 try:
                     return func(*args, **kwargs)
-                except HTTPError407:
+                except (HTTPError, HTTPError407):
                     pass
             else:
                 raise e
@@ -77,7 +77,9 @@ class Client:
             user_name: str,
             system_code: str,
             max_retry: int = 10,
-            base_url: str = "https://intl.fusionsolar.huawei.com/thirdData"
+            base_url: str = "https://intl.fusionsolar.huawei.com/thirdData",
+            token: str = None,
+            token_expire: pd.Timestamp = None
     ):
         self.user_name = user_name
         self.system_code = system_code
@@ -88,7 +90,15 @@ class Client:
         self.session.headers.update(
             {'Connection': 'keep-alive', 'Content-Type': 'application/json'})
 
-        self.token_expiration_time = 0
+        if token:
+            self.session.headers.update(
+                {'XSRF-TOKEN': token})
+            if token_expire:
+                self.token_expiration_time = token_expire.timestamp() if isinstance(token_expire, pd.Timestamp) else token_expire
+            else:
+                self.token_expiration_time = pd.Timestamp.utcnow().timestamp() + 1200
+        else:
+            self.token_expiration_time = 0
 
     def __enter__(self):
         self.login()
@@ -112,7 +122,7 @@ class Client:
 
     @staticmethod
     def _validate_response(response: requests.Response) -> bool:
-        response.raise_for_status()
+        #response.raise_for_status()
         body = response.json()
         success = body.get('success', False)
         if not success:
