@@ -2,8 +2,7 @@ import logging
 from functools import wraps
 from time import sleep
 from typing import Dict
-
-import pandas as pd
+from datetime import datetime
 import requests
 
 
@@ -14,17 +13,22 @@ class HTTPError(Exception):
 class HTTPError407(HTTPError):
     pass
 
+
 class HTTPError305(HTTPError):
     pass
+
 
 class HTTPError306(HTTPError):
     pass
 
+
 class HTTPError307(HTTPError):
     pass
 
+
 class HTTPError401(HTTPError):
     pass
+
 
 def authenticated(func):
     """
@@ -34,7 +38,7 @@ def authenticated(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
         self = args[0]
-        if self.token_expiration_time <= pd.Timestamp.utcnow().timestamp():
+        if self.token_expiration_time <= datetime.utcnow().timestamp():
             self.login()
         return func(*args, **kwargs)
 
@@ -79,7 +83,7 @@ class Client:
             max_retry: int = 10,
             base_url: str = "https://intl.fusionsolar.huawei.com/thirdData",
             token: str = None,
-            token_expire: pd.Timestamp = None
+            token_expire: datetime = None
     ):
         self.user_name = user_name
         self.system_code = system_code
@@ -94,9 +98,9 @@ class Client:
             self.session.headers.update(
                 {'XSRF-TOKEN': token})
             if token_expire:
-                self.token_expiration_time = token_expire.timestamp() if isinstance(token_expire, pd.Timestamp) else token_expire
+                self.token_expiration_time = token_expire.timestamp() if isinstance(token_expire, datetime) else token_expire
             else:
-                self.token_expiration_time = pd.Timestamp.utcnow().timestamp() + 1200
+                self.token_expiration_time = datetime.utcnow().timestamp() + 1200
         else:
             self.token_expiration_time = 0
 
@@ -118,7 +122,7 @@ class Client:
         self._validate_response(response=r)
         self.session.headers.update(
             {'XSRF-TOKEN': r.cookies.get(name='XSRF-TOKEN')})
-        self.token_expiration_time = pd.Timestamp.utcnow().timestamp() + 1200
+        self.token_expiration_time = datetime.utcnow().timestamp() + 1200
 
     @staticmethod
     def _validate_response(response: requests.Response) -> bool:
@@ -164,26 +168,26 @@ class Client:
                              {'stationCodes': station_code})
 
     def get_station_kpi_hour(self, station_code: str,
-                             date: pd.Timestamp) -> Dict:
+                             date: datetime) -> Dict:
         time = int(date.timestamp()) * 1000
         return self._request("getKpiStationHour", {'stationCodes': station_code,
                                                    'collectTime': time})
 
     def get_station_kpi_day(self, station_code: str,
-                            date: pd.Timestamp) -> Dict:
+                            date: datetime) -> Dict:
         time = int(date.timestamp()) * 1000
         return self._request("getKpiStationDay", {'stationCodes': station_code,
                                                   'collectTime': time})
 
     def get_station_kpi_month(self, station_code: str,
-                              date: pd.Timestamp) -> Dict:
+                              date: datetime) -> Dict:
         time = int(date.timestamp()) * 1000
         return self._request("getKpiStationMonth",
                              {'stationCodes': station_code,
                               'collectTime': time})
 
     def get_station_kpi_year(self, station_code: str,
-                             date: pd.Timestamp) -> Dict:
+                             date: datetime) -> Dict:
         time = int(date.timestamp()) * 1000
         return self._request("getKpiStationYear", {'stationCodes': station_code,
                                                    'collectTime': time})
@@ -196,35 +200,35 @@ class Client:
                              {'devIds': dev_id, 'devTypeId': dev_type_id})
 
     def get_dev_kpi_fivemin(self, dev_id: str, dev_type_id: int,
-                            date: pd.Timestamp) -> Dict:
+                            date: datetime) -> Dict:
         time = int(date.timestamp()) * 1000
         return self._request("getDevFiveMinutes",
                              {'devIds': dev_id, 'devTypeId': dev_type_id,
                               'collectTime': time})
 
     def get_dev_kpi_hour(self, dev_id: str, dev_type_id: int,
-                         date: pd.Timestamp) -> Dict:
+                         date: datetime) -> Dict:
         time = int(date.timestamp()) * 1000
         return self._request("getDevKpiHour",
                              {'devIds': dev_id, 'devTypeId': dev_type_id,
                               'collectTime': time})
 
     def get_dev_kpi_day(self, dev_id: str, dev_type_id: int,
-                        date: pd.Timestamp) -> Dict:
+                        date: datetime) -> Dict:
         time = int(date.timestamp()) * 1000
         return self._request("getDevKpiDay",
                              {'devIds': dev_id, 'devTypeId': dev_type_id,
                               'collectTime': time})
 
     def get_dev_kpi_month(self, dev_id: str, dev_type_id: int,
-                          date: pd.Timestamp) -> Dict:
+                          date: datetime) -> Dict:
         time = int(date.timestamp()) * 1000
         return self._request("getDevKpiMonth",
                              {'devIds': dev_id, 'devTypeId': dev_type_id,
                               'collectTime': time})
 
     def get_dev_kpi_year(self, dev_id: str, dev_type_id: int,
-                         date: pd.Timestamp) -> Dict:
+                         date: datetime) -> Dict:
         time = int(date.timestamp()) * 1000
         return self._request("getDevKpiYear",
                              {'devIds': dev_id, 'devTypeId': dev_type_id,
@@ -246,25 +250,3 @@ class Client:
     def get_dev_upgradeinfo(self, dev_id: str, dev_type_id: int) -> Dict:
         return self._request("getDevUpgradeInfo",
                              {'devIds': dev_id, 'devTypeId': dev_type_id})
-
-
-class PandasClient(Client):
-    def get_kpi_day(self, station_code: str,
-                    date: pd.Timestamp) -> pd.DataFrame:
-        data = super(PandasClient, self).get_station_kpi_day(
-            station_code=station_code, date=date)
-        if len(data['data']) == 0:
-            return pd.DataFrame()
-
-        def flatten_data(j):
-            for point in j['data']:
-                line = {'collectTime': point['collectTime']}
-                line.update(point['dataItemMap'])
-                yield line
-
-        df = pd.DataFrame(flatten_data(data))
-        df['collectTime'] = pd.to_datetime(df['collectTime'], unit='ms',
-                                           utc=True)
-        df.set_index('collectTime', inplace=True)
-        df = df.astype(float)
-        return df

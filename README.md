@@ -4,12 +4,12 @@ Python client for Huawey FusionSolar API
 ## Example usage
 
 ```python
-from fusionsolar import Client, PandasClient
-import pandas as pd
+from fusionsolar import Client
+from datetime import datetime
 
-date = pd.Timestamp('20200402', tz='Europe/Brussels')
+date = datetime.now()
 
-with PandasClient(user_name=user, system_code=password) as client:
+with Client(user_name=user, system_code=password) as client:
     sl = client.get_station_list()
     station_code = sl['data'][0]['stationCode']
     
